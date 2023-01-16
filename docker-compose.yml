@@ -1,0 +1,76 @@
+version: "3.7"
+
+services:
+
+  vsc.identityserver:
+    container_name: vsc.identityserver
+    build: #
+      context: ./vsc.identityserver
+      dockerfile: Vsc.IdentityServer.Web/Dockerfile
+    command: /bin/bash -c "update-ca-certificates"
+    env_file: .env
+    ports:
+      - 10001:80
+      - 10002:443
+    environment:
+      ConnectionStrings__ApplicationDbContext: $VSC_IDENTITY_DB_CONNECTION_STRING
+      EncryptionCertificatePublicKeyXml: $ENCRYPTION_CERTIFICATE_PUBLIC_KEY_XML
+      SignInCertificatePublicKeyXml: $SIGNIN_CERTIFICATE_PUBLIC_KEY_XML
+      EncryptionCertificatePassword: $ENCRYPTION_CERTIFICATE_PASSWORD
+      SignInCertificatePassword: $SIGNIN_CERTIFICATE_PASSWORD
+      Issuer: http://vsc.identityserver:80/
+      ClientId: $CLIENT_ID
+      ClientSecret: $CLIENT_SECRET
+      ASPNETCORE_Kestrel__Certificates__Default__Path: aspnetcore.pfx 
+      ASPNETCORE_Kestrel__Certificates__Default__Password: aspnetcore
+      ASPNETCORE_URLS: https://+;http://+"
+    volumes:
+      - ./https:/https:ro #this is very important
+      - ./https:/usr/local/share/ca-certificates:ro
+    networks:
+      - auth-network
+
+  vsc.contacts.api:
+    container_name: vsc.contacts.api
+    build: #
+      context: ./vsc.contacts.api
+      dockerfile: Vsc.Contacts.Api/Dockerfile
+    env_file: .env
+    command: /bin/bash -c "chmod 644 /usr/local/share/ca-certificates/aspnetcore.crt && update-ca-certificates"
+    ports:
+      - 20001:80
+      - 20002:443
+    environment:
+      Issuer: http://localhost:10001/
+      ConnectionStrings__ApplicationDbContext: $VSC_CONTACTS_DB_CONNECTION_STRING
+      IdentityServerUrl: http://vsc.identityserver:80/
+      EncryptionCertificatePrivateKeyXml: $ENCRYPTION_CERTIFICATE_PRIVATE_KEY_XML
+      SignInCertificatePrivateKeyXml: $SIGNIN_CERTIFICATE_PRIVATE_KEY_XML
+      ClientId: $CLIENT_ID
+      ClientSecret: $CLIENT_SECRET
+      ASPNETCORE_Kestrel__Certificates__Default__Path: aspnetcore.pfx 
+      ASPNETCORE_Kestrel__Certificates__Default__Password: aspnetcore
+      ASPNETCORE_URLS: https://+;http://+"
+    volumes:
+      - ./https:/https:ro #this is very important
+      - ./https:/usr/local/share/ca-certificates:ro
+    networks:
+      - auth-network
+
+  vsc.contacts.ui:
+    build: #
+      context: ./vsc.contacts.ui
+      dockerfile: Dockerfile
+    env_file: .env
+    ports:
+      - 80:80
+    environment:
+      IDENTITY_SERVER_URL: http://localhost:10001/
+      CONTACTS_RESOURCE_SERVER_URL: https://localhost:20002/
+      CONTACTS_CLIENT_ID: $CLIENT_ID
+      CONTACTS_CLIENT_SECRET: $CLIENT_SECRET
+      CLIENT_APP_URL: $CLIENT_APP_URL
+
+networks:
+  auth-network:
+    driver: bridge
